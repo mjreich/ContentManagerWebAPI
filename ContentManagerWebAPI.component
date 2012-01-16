@@ -1,0 +1,48 @@
+<?php
+
+namespace ContentManagerWebAPI;
+
+use Cumula\BaseComponent as BaseComponent;
+
+class ContentManagerWebAPI extends BaseComponent {
+	
+	public function __construct() {
+		parent::__construct();
+	}
+	
+	public function startup() {
+		$that = $this;
+		$this->addEventListenerTo('Router', 'router_collect_routes', function() use ($that) {
+			return array('/content' => array(&$that, 'index'),
+						'/content/load/$id' => array(&$that, 'load'),
+						'/content/create' => array(&$that, 'create'),
+						'/content/delete/$id' => array(&$that, 'delete'),
+						'/content/update/$id' => array(&$that, 'update'),
+			);
+		});
+	}
+	
+	public function index() {
+		print 'hello!';
+	}
+	
+	public function load($route, $router, $args) {
+		$content = \I('ContentManager')->load($args['id']);
+		print_r($content);
+	}
+	
+	public function create($route, $router, $args) {
+		$content = \I('ContentManager')->create($args);
+		print_r($content);
+	}
+	
+	public function update($route, $router, $args) {
+		$content = \I('ContentManager')->update($args['id'], $args);
+		print_r($content);
+	}
+	
+	public function delete($route, $router, $args) {
+		$content = \I('ContentManager')->delete($args['id']);
+		print_r($content);
+	}
+}

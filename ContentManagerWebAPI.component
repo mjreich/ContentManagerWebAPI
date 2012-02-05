@@ -1,48 +1,193 @@
 <?php
-
 namespace ContentManagerWebAPI;
+/**
+ * ContentManagerWebAPI
+ *
+ * ContentManagerWebAPI — Adds a web API on top of the ContentManager Programmatic API
+ *
+ * @package    ContentManagerWebAPI
+ * @version    0.1.0
+ * @author     Seabourne Consulting
+ * @license    MIT License
+ * @copyright  2012 Seabourne Consulting
+ * @link       https://mjreich@github.com/mjreich/ContentManagerWebAPI.git
+ */
 
 use Cumula\BaseComponent as BaseComponent;
 
+/**
+ * ContentManagerWebAPI Class
+ *
+ * The ContentManagerWebAPI Class provides an easy to use web API wrapper around the ContentManager Programmatic API.  
+ * It registers a series of routes under the /content path that provides CRUD operations for each content item.  
+ *
+ * The component also provides a dynamic query interface that allows users to pass any parameter and return matching results.
+ *
+ * All returns are in JSON format.  Each return includes a 'success' indicator as well as the 'results' attribute with the resutls, 
+ * if any.
+ *
+ * @package		ContentManagerWebAPI
+ * @author     Seabourne Consulting
+ */
 class ContentManagerWebAPI extends BaseComponent {
 	
+	/**
+	 * The default constructor.  Not used for anything in this context.
+	 *
+	 * @author Mike Reich
+	 */
 	public function __construct() {
 		parent::__construct();
 	}
 	
+	/**
+	 * Thes standard startup function.  Registers the routes with the Router.
+	 *
+	 * @return void
+	 * @author Mike Reich
+	 */
 	public function startup() {
 		$that = $this;
 		$this->addEventListenerTo('Router', 'router_collect_routes', function() use ($that) {
 			return array('/content' => array(&$that, 'index'),
 						'/content/load/$id' => array(&$that, 'load'),
-						'/content/create' => array(&$that, 'create'),
+						'/content/create/$type' => array(&$that, 'create'),
 						'/content/delete/$id' => array(&$that, 'delete'),
 						'/content/update/$id' => array(&$that, 'update'),
+						'/content/query' => array(&$that, 'query'),
 			);
 		});
 	}
 	
-	public function index() {
-		print 'hello!';
-	}
+	////////////////////////////////////////////////////////
+	// Web API Responder Functions
+	////////////////////////////////////////////////////////
 	
+	/**
+	 * Handles incoming load requests and passes them to the content manager.
+	 *
+	 * @param string $route 
+	 * @param string $router 
+	 * @param string $args 
+	 * @return void
+	 * @author Mike Reich
+	 */
 	public function load($route, $router, $args) {
 		$content = \I('ContentManager')->load($args['id']);
-		print_r($content);
+		$this->_sendReturn($content);
 	}
 	
+	/**
+	 * Handles incoming create requests and passes them to the content manager.
+	 *
+	 * @param string $route 
+	 * @param string $router 
+	 * @param string $args 
+	 * @return void
+	 * @author Mike Reich
+	 */
 	public function create($route, $router, $args) {
-		$content = \I('ContentManager')->create($args);
-		print_r($content);
+		if(!isset($args['type'])) {
+			$this->_sendError('Type parameter is required');
+			return;
+		}
+		$content = \I('ContentManager')->create($args['type'], $args);
+		$this->_sendReturn($content);
 	}
 	
+	/**
+	 * Handles incoming update requests and passes them to the content manager.
+	 *
+	 * @param string $route 
+	 * @param string $router 
+	 * @param string $args 
+	 * @return void
+	 * @author Mike Reich
+	 */
 	public function update($route, $router, $args) {
-		$content = \I('ContentManager')->update($args['id'], $args);
-		print_r($content);
+		$id = $args['id'];
+		unset($args['id']);
+		foreach($args as $key => &$value) {
+			if($value == 'false')
+				$value = false;
+			if($value == '0')
+				$value = 0;
+		}
+		$content = \I('ContentManager')->update($id, $args);
+		$this->_sendReturn($content);
 	}
 	
+	/**
+	 * Handles incoming delete requests and passes the to the content manager.
+	 *
+	 * @param string $route 
+	 * @param string $router 
+	 * @param string $args 
+	 * @return void
+	 * @author Mike Reich
+	 */
 	public function delete($route, $router, $args) {
 		$content = \I('ContentManager')->delete($args['id']);
-		print_r($content);
+		$this->_sendReturn($content);
 	}
+	
+	/**
+	 * Handles incoming query requests and passes them to the content manager.
+	 *
+	 * @param string $route 
+	 * @param string $router 
+	 * @param string $args 
+	 * @return void
+	 * @author Mike Reich
+	 */
+	public function query($route, $router, $args) {
+		if(isset($args['query_type'])) {
+			$query_type = $args['query_type'];
+			unset($args['query_type']);
+		} else {
+			$query_type = 'OR';
+		}
+		
+		$content = \I('ContentManager')->query($args, $query_type);
+		$this->_sendReturn($content, 'results');
+	}
+	
+	/**
+	 * Protected function that defines the JSON return to send back to the client.  The success flag is set to true.
+	 *
+	 * @param string $content the content to be returned
+	 * @param string $root the root name of the content, needed to switch for error messages.
+	 * @return void
+	 * @author Mike Reich
+	 */
+	protected function _sendReturn($content, $root = 'content') {
+		$this->renderPlain(json_encode(array('success' => true, $root => $content)), false, 'application/json');
+	}
+	
+	/**
+	 * Protected function that defines the JSON encoded error return if something goes wrong.
+	 *
+	 * @param string $error An error message to return.  The success flag is set to false.
+	 * @return void
+	 * @author Mike Reich
+	 */
+	protected function _sendError($error) {
+		$this->renderPlain(json_encode(array('success' => false, 'error' => $error)), false, 'application/json');
+	}
+	
+	/**
+	 * The default BaseComponent getInfo metadata method.
+	 *
+	 * @return void
+	 * @author Mike Reich
+	 */
+	public static function getInfo() {
+        return array(
+            'name' => 'Content Manager Web API',
+            'description' => 'Provides a RESTful Web API for the Content Manager',
+            'version' => '0.1',
+            'dependencies' => array('ContentManager'),
+			'package' => 'Content',
+        );
+    }
 }
